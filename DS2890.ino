@@ -180,7 +180,7 @@ void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
 		case DS_WaitingNewControlRegisterRelease:
 			if (data == DS2890_WRITE_RELEASE) {
 				controlRegister = newControlRegister;
-				wiper = newControlRegister & DS2890_CONTROL_WN_MASK;
+				wiper = newControlRegister & DS2890_CONTROL_WN;
 				OWSlave.writeBit(0,true);
 			} else {
 				OWSlave.writeBit(1,true);
