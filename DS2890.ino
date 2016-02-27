@@ -30,11 +30,6 @@
 // This is the pin that will be used for one-wire data (depending on your arduino model, you are limited to a few choices, because some pins don't have complete interrupt support)
 // On Arduino Uno, you can use pin 2 or pin 3
 Pin oneWireData(2);
-Pin led1(13);
-Pin led2(3);
-Pin led3(5);
-Pin led4(6);
-Pin led5(9);
 
 const byte analogOutPins[4] = { 3, 5, 6, 9 };
 
@@ -58,34 +53,28 @@ const byte DS2890_FEATURE_NP = 0b00001100; // number of potentiometers
 const byte DS2890_FEATURE_NWP = 0b00110000; // number of wiper positions 00 => 32, 01 => 64, 10 => 128, 11 => 256
 const byte DS2890_FEATURE_PR = 0b11000000; // potentiometer resistance: 00 => 5k, 01 => 10k, 10 => 50k, 11 => 100k
 
-const byte featureRegister = 0b11110011; // linear, volatile, 1 potentiometer, 256 positions, 100k
+const byte featureRegister = 0b11111111; // linear, volatile, 4 potentiometer, 256 positions, 100k
 
 const byte DS2890_CONTROL_WN = 0b00000011; // wiper number to control
 const byte DS2890_CONTROL_WN_INV = 0b00001100; // inverted wiper number to control
 const byte DS2890_CONTROL_WN_MASK = DS2890_CONTROL_WN_INV | DS2890_CONTROL_WN;
 const byte DS2890_CONTROL_CPC = 0b01000000; // charge pump control: 0 => off, 1 => on
 
-// TODO: handle RESUME_COMMAND [A5H] (should be implemented in the OneWireSlave-lib)
-// const byte DS2890_RESUME_COMMAND = 0xA5;
-// - handle configuration (resolution, alarms)
-
 enum DeviceState {
-	DS_Idle,
 	DS_WaitingReset,
 	DS_WaitingCommand,
 	DS_WaitingNewPosition,
 	DS_WaitingNewPositionRelease,
 	DS_WaitingNewControlRegister,
-	DS_WaitingNewControlRegisterRelease,
-	DS_Unexpected
+	DS_WaitingNewControlRegisterRelease
 };
 
-volatile DeviceState state = DS_Idle;
+volatile DeviceState state = DS_WaitingReset;
 
 volatile byte wiper = 0;
 volatile byte wiperPositions[4];
 volatile byte newPosition;
-volatile byte controlRegister;
+volatile byte controlRegister = 0b00001100;
 volatile byte newControlRegister;
 
 // This function will be called each time the OneWire library has an event to notify (reset, error, byte received)
@@ -97,23 +86,12 @@ void owAfterReadFinish(bool error);
 void owAfterNewPosition(bool error);
 void owAfterNewControlRegister(bool error);
 void owAfterPositionChange(bool error);
-void owStopWrite(bool error);
 
 void setup() {
-//	byte i;
-//	for (i=0;i<4;i++) {
-//		pinMode(analogOutPins[i],OUTPUT);
-//	}
-	led1.outputMode();
-	led1.writeLow();
-	led2.outputMode();
-	led2.writeLow();
-	led3.outputMode();
-	led3.writeLow();
-	led4.outputMode();
-	led4.writeLow();
-	led5.outputMode();
-	led5.writeLow();
+	byte i;
+	for (i=0;i<4;i++) {
+		pinMode(analogOutPins[i],OUTPUT);
+	}
 	// Setup the OneWire library
 	OWSlave.setReceiveCallback(&owReceive);
 	OWSlave.begin(owROM, oneWireData.getPinNumber());
@@ -126,50 +104,12 @@ void loop() {
 	//disable interrupts
 	// Be sure to not block interrupts for too long, OneWire timing is very tight for some operations. 1 or 2 microseconds (yes, microseconds, not milliseconds) can be too much depending on your master controller, but then it's equally unlikely that you block exactly at the moment where it matters.
 	// This can be mitigated by using error checking and retry in your high-level communication protocol. A good thing to do anyway.
-//	byte localWiper = wiper;
-//	byte localPosition = wiperPositions[localWiper];
-	byte localState = state;
+	byte localWiper = wiper;
+	byte localPosition = wiperPositions[localWiper];
 	sei();
-	//enable interrupts
 
-	switch (localState) {
-	case DS_Idle:
-		led1.writeHigh();
-		led2.writeLow();
-		led3.writeLow();
-		led4.writeLow();
-		led5.writeLow();
-		break;
-	case DS_WaitingCommand:
-		led1.writeLow();
-		led2.writeHigh();
-		led3.writeLow();
-		led4.writeLow();
-		led5.writeLow();
-		break;
-	case DS_WaitingReset:
-		led1.writeLow();
-		led2.writeLow();
-		led3.writeHigh();
-		led4.writeLow();
-		led5.writeLow();
-		break;
-	case DS_Unexpected:
-		led1.writeLow();
-		led2.writeLow();
-		led3.writeLow();
-		led4.writeHigh();
-		led5.writeLow();
-		break;
-	default:
-		led1.writeLow();
-		led2.writeLow();
-		led3.writeLow();
-		led4.writeLow();
-		led5.writeHigh();
-		break;
-	}
-	//analogWrite(analogOutPins[localWiper], localPosition);
+	//enable interrupts
+	analogWrite(analogOutPins[localWiper], localPosition);
 }
 
 void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
@@ -203,7 +143,8 @@ void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
 				OWSlave.write((const byte*)&wiperPositions[wiper],1,&owAfterPositionChange);
 				break;
 			default:
-				state = DS_Unexpected;
+				OWSlave.stopWrite();
+				state = DS_WaitingReset;
 				break;
 			}
 			break;
@@ -248,21 +189,19 @@ void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
 			break;
 
 		default:
-			state = DS_Unexpected;
+			OWSlave.stopWrite();
+			state = DS_WaitingReset;
+			break;
 		}
 		break;
 
 	case OneWireSlave::RE_Reset:
-		if (state == DS_WaitingReset) {
-			state = DS_Idle;
-		} else {
-			state = DS_WaitingCommand;
-		}
+		state = DS_WaitingCommand;
 		break;
 
 	case OneWireSlave::RE_Error:
 		OWSlave.stopWrite();
-		state = DS_Idle;
+		state = DS_WaitingReset;
 		break;
 	}
 }
@@ -270,7 +209,7 @@ void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
 void owAfterReadPosition(bool error) {
 	if (error) {
 		OWSlave.stopWrite();
-		state = DS_Idle;
+		state = DS_WaitingReset;
 	} else {
 		OWSlave.write((const byte*)&wiperPositions[wiper],1,&owAfterReadFinish);
 	}
@@ -279,7 +218,7 @@ void owAfterReadPosition(bool error) {
 void owAfterReadControlRegister(bool error) {
 	if (error) {
 		OWSlave.stopWrite();
-		state = DS_Idle;
+		state = DS_WaitingReset;
 	} else {
 		OWSlave.write((const byte*)&controlRegister,1,&owAfterReadFinish);
 	}
@@ -288,24 +227,23 @@ void owAfterReadControlRegister(bool error) {
 void owAfterReadFinish(bool error) {
 	if (error) {
 		OWSlave.stopWrite();
-		state = DS_Idle;
 	} else {
 		OWSlave.writeBit(0,true);
-		state = DS_WaitingReset;
 	}
+	state = DS_WaitingReset;
 }
 
 void owAfterNewPosition(bool error) {
 	OWSlave.stopWrite();
-	state = error ? DS_Idle : DS_WaitingNewPositionRelease;
+	state = error ? DS_WaitingReset : DS_WaitingNewPositionRelease;
 }
 
 void owAfterNewControlRegister(bool error) {
 	OWSlave.stopWrite();
-	state = error ? DS_Idle : DS_WaitingNewControlRegisterRelease;
+	state = error ? DS_WaitingReset : DS_WaitingNewControlRegisterRelease;
 }
 
 void owAfterPositionChange(bool error) {
 	OWSlave.stopWrite();
-	state = error ? DS_Idle : DS_WaitingCommand;
+	state = error ? DS_WaitingReset : DS_WaitingCommand;
 }
