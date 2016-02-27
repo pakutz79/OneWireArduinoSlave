@@ -24,14 +24,22 @@
 /**********************************************************************************/
 
 #include "Arduino.h"
+
 #include "LowLevel.h"
 #include "OneWireSlave.h"
+#include "Potentiometer.h"
+#include "Wire.h"
+//#include "dummy.h"
+#include "mcp455x.h"
 
 // This is the pin that will be used for one-wire data (depending on your arduino model, you are limited to a few choices, because some pins don't have complete interrupt support)
 // On Arduino Uno, you can use pin 2 or pin 3
 Pin oneWireData(2);
 
-const byte analogOutPins[4] = { 3, 5, 6, 9 };
+//Dummy poti[4];
+MCP455X poti[2] = { MCP455X(0), MCP455X(1) };
+
+const byte steps = MCP455X::steps;
 
 // This is the ROM the arduino will respond to, make sure it doesn't conflict with another device
 const byte owROM[7] = { 0x2C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02 };
@@ -53,7 +61,7 @@ const byte DS2890_FEATURE_NP = 0b00001100; // number of potentiometers
 const byte DS2890_FEATURE_NWP = 0b00110000; // number of wiper positions 00 => 32, 01 => 64, 10 => 128, 11 => 256
 const byte DS2890_FEATURE_PR = 0b11000000; // potentiometer resistance: 00 => 5k, 01 => 10k, 10 => 50k, 11 => 100k
 
-const byte featureRegister = 0b11111111; // linear, volatile, 4 potentiometer, 256 positions, 100k
+const byte featureRegister = 0b11110111; // linear, volatile, 2 potentiometer, 256 positions, 100k
 
 const byte DS2890_CONTROL_WN = 0b00000011; // wiper number to control
 const byte DS2890_CONTROL_WN_INV = 0b00001100; // inverted wiper number to control
@@ -88,9 +96,10 @@ void owAfterNewControlRegister(bool error);
 void owAfterPositionChange(bool error);
 
 void setup() {
-	byte i;
-	for (i=0;i<4;i++) {
-		pinMode(analogOutPins[i],OUTPUT);
+	Wire.begin();
+
+	for (byte i=0;i<4;i++) {
+		wiperPositions[i] = poti[(i >> 1) & 1].readPosition(i & 1);
 	}
 	// Setup the OneWire library
 	OWSlave.setReceiveCallback(&owReceive);
@@ -107,9 +116,9 @@ void loop() {
 	byte localWiper = wiper;
 	byte localPosition = wiperPositions[localWiper];
 	sei();
-
 	//enable interrupts
-	analogWrite(analogOutPins[localWiper], localPosition);
+
+	poti[(localWiper >> 1) & 1].writePosition(localWiper & 1,localPosition);
 }
 
 void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
@@ -131,7 +140,7 @@ void owReceive(OneWireSlave::ReceiveEvent evt, byte data) {
 				state = DS_WaitingNewControlRegister;
 				break;
 			case DS2890_INCREMENT:
-				if (wiperPositions[wiper] < 0xFF) {
+				if (wiperPositions[wiper] < steps) {
 					wiperPositions[wiper]++;
 				}
 				OWSlave.write((const byte*)&wiperPositions[wiper],1,&owAfterPositionChange);
