@@ -27,18 +27,19 @@
 
 #include "OneWireSlave.h"
 #include "Potentiometer.h"
-#include "Wire.h"
-//#include "dummy.h"
-#include "mcp455x.h"
+//#include "Wire.h"
+#include "dummy.h"
+//#include "mcp455x.h"
 
 // This is the pin that will be used for one-wire data (depending on your arduino model, you are limited to a few choices, because some pins don't have complete interrupt support)
 // On Arduino Uno, you can use pin 2 or pin 3
 Pin oneWireData(2);
 
-//Dummy poti[4];
-MCP455X poti[2] = { MCP455X(0), MCP455X(1) };
+Dummy poti[4];
+//MCP455X poti[2] = { MCP455X(0), MCP455X(1) };
 
-const byte steps = MCP455X::steps;
+const byte steps = 255;
+//const byte steps = MCP455X::steps;
 
 // This is the ROM the arduino will respond to, make sure it doesn't conflict with another device
 const byte owROM[7] = { 0x2C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02 };
@@ -95,7 +96,7 @@ void owAfterNewControlRegister(bool error);
 void owAfterPositionChange(bool error);
 
 void setup() {
-	Wire.begin();
+	//Wire.begin();
 
 	for (byte i=0;i<4;i++) {
 		wiperPositions[i] = poti[(i >> 1) & 1].readPosition(i & 1);

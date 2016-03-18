@@ -27,15 +27,15 @@
 __attribute__((always_inline)) static inline void UserTimer_Init( void )
 {
 	UserTimer_SetToPowerup();
-	UserTimer_SetWaveformGenerationMode(CTC_OCR);
+	UserTimer_SetWaveformGenerationMode(UserTimer_(CTC_OCR));
 }
 __attribute__((always_inline)) static inline void UserTimer_Run(short skipTicks)
 {
 	UserTimer_SetCount(0);
 	UserTimer_SetOutputCompareMatchAndClear(skipTicks);
-	UserTimer_ClockSelect(Prescale_Value_64);
+	UserTimer_ClockSelect(UserTimer_(Prescale_Value_64));
 }
-#define UserTimer_Stop() UserTimer_ClockSelect(Stopped)
+#define UserTimer_Stop() UserTimer_ClockSelect(UserTimer_(Stopped))
 
 #elif defined (__AVR_ATmega328P__)
 #define CLEARINTERRUPT EIFR |= (1 << INTF0)
