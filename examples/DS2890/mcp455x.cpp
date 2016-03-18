@@ -6,7 +6,11 @@
  */
 
 #include "mcp455x.h"
+#if (defined __AVR_ATtiny25__ || defined  __AVR_ATtiny45__ || defined  __AVR_ATtiny85__)
+#define WI_ATTINY25
+#else
 #include "Wire.h"
+#endif
 
 const byte ADR_BASE  = 0x28;
 const byte CMD_READ  = 0x0c;
@@ -32,15 +36,18 @@ MCP455X::MCP455X(byte address):address_(address) {
 }
 
 void MCP455X::begin() {
+#ifndef WI_ATTINY25
 	Wire.beginTransmission(ADR_BASE | address_);
 	Wire.write(REG_TCON | CMD_WRITE); //GCEN not set
 	Wire.write(R1HW | R1A | R1W | R1B | R0HW | R0A | R0W | R0B);
 	Wire.endTransmission();
+#endif
 }
 
 void MCP455X::writePosition(byte wiper, unsigned int pos) {
-	Wire.beginTransmission(ADR_BASE | address_);
-	switch(wiper) {
+#ifndef WI_ATTINY25
+        Wire.beginTransmission(ADR_BASE | address_);
+        switch(wiper) {
 	case 0:
 		Wire.write(REG_WIPER0 | CMD_WRITE | ((pos >> 8) & 0x01) );
 		break;
@@ -50,9 +57,11 @@ void MCP455X::writePosition(byte wiper, unsigned int pos) {
 	};
 	Wire.write(pos & 0xFF);
 	Wire.endTransmission();
+#endif
 }
 
 unsigned int MCP455X::readPosition(byte wiper) {
+#ifndef WI_ATTINY25
 	Wire.beginTransmission(ADR_BASE | address_);
 	switch(wiper) {
 	case 0:
@@ -67,9 +76,11 @@ unsigned int MCP455X::readPosition(byte wiper) {
 	Wire.read();
 	byte ret = Wire.read();
 	return ret;
+#endif
 }
 
 unsigned int MCP455X::increment(byte wiper) {
+#ifndef WI_ATTINY25
 	Wire.beginTransmission(ADR_BASE | address_);
 	switch(wiper) {
 	case 0:
@@ -81,9 +92,11 @@ unsigned int MCP455X::increment(byte wiper) {
 	};
 	Wire.endTransmission();
 	return readPosition(wiper);
+#endif
 }
 
 unsigned int MCP455X::decrement(byte wiper) {
+#ifndef WI_ATTINY25
 	Wire.beginTransmission(ADR_BASE | address_);
 	switch(wiper) {
 	case 0:
@@ -95,6 +108,7 @@ unsigned int MCP455X::decrement(byte wiper) {
 	};
 	Wire.endTransmission();
 	return readPosition(wiper);
+#endif WI_ATTINY25
 }
 
 

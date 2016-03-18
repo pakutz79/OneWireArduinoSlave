@@ -21,9 +21,11 @@
 #define DIRECT_WRITE_LOW(base, mask)    ((*((base)+2)) &= ~(mask))
 #define DIRECT_WRITE_HIGH(base, mask)   ((*((base)+2)) |= (mask))
 
-#if defined (__AVR_ATtiny85__)
-#define CLEARINTERRUPT GIFR |= (1 << INTF0)
+#if (defined __AVR_ATtiny25__ || defined  __AVR_ATtiny45__ || defined  __AVR_ATtiny85__)
+#define OW_ATTINY25
 #include "UserTimer.h" //ATtiny-support based on TinyCore1 Arduino-core for ATtiny at http://github.com/Coding-Badly/TinyCore1.git
+#define LIBCALL_ENABLEINTERRUPT
+#include "EnableInterrupt.h"
 __attribute__((always_inline)) static inline void UserTimer_Init( void )
 {
 	UserTimer_SetToPowerup();
@@ -38,7 +40,6 @@ __attribute__((always_inline)) static inline void UserTimer_Run(short skipTicks)
 #define UserTimer_Stop() UserTimer_ClockSelect(UserTimer_(Stopped))
 
 #elif defined (__AVR_ATmega328P__)
-#define CLEARINTERRUPT EIFR |= (1 << INTF0)
 #define USERTIMER_COMPA_vect TIMER1_COMPA_vect
 
 __attribute__((always_inline)) static inline void UserTimer_Init( void )
@@ -110,14 +111,18 @@ class Pin
 private:
 	volatile IO_REG_TYPE *reg_;
 	IO_REG_TYPE mask_;
+#ifndef OW_ATTINY25
 	byte interruptNumber_;
+#endif
 	byte pinNumber_;
 
 public:
 	Pin()
 		: mask_(0)
 		, reg_(0)
+#ifndef OW_ATTINY25
 		, interruptNumber_((byte)-1)
+#endif
 		, pinNumber_(255)
 	{ }
 
@@ -127,12 +132,14 @@ public:
 		mask_ = PIN_TO_BITMASK(pin);
 		reg_ = PIN_TO_BASEREG(pin);
 		
+#ifndef OW_ATTINY25
 		switch (pin)
 		{
 		case 2: interruptNumber_ = 0; break;
 		case 3: interruptNumber_ = 1; break;
 		default: interruptNumber_ = (byte)-1;
 		}
+#endif
 	}
 
 	inline byte getPinNumber() { return pinNumber_; }
@@ -147,10 +154,19 @@ public:
 
 	inline void attachInterrupt(void (*handler)(), int mode)
 	{
-		CLEARINTERRUPT;  // clear any pending interrupt (we want to call the handler only for interrupts happending after it is attached)
+#ifdef OW_ATTINY25
+                GIFR |= (1 << (pinNumber_ == 2 ? INTF0 : PCIF));
+                enableInterrupt(pinNumber_, handler, mode);
+#else
+                EIFR |= (1 << INTF0);  // clear any pending interrupt (we want to call the handler only for interrupts happening after it is attached)
 		::attachInterrupt(interruptNumber_, handler, mode);
+#endif
 	}
+#ifdef OW_ATTINY25
+	inline void detachInterrupt() { disableInterrupt(pinNumber_); }
+#else
 	inline void detachInterrupt() { ::detachInterrupt(interruptNumber_); }
+#endif
 };
 
 #endif

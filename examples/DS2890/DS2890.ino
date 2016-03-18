@@ -25,15 +25,20 @@
 
 #include "Arduino.h"
 
+#if (defined __AVR_ATtiny25__ || defined  __AVR_ATtiny45__ || defined  __AVR_ATtiny85__)
+#include "EnableInterrupt.h"
+#else
+#include "Wire.h"
+#endif
 #include "OneWireSlave.h"
 #include "Potentiometer.h"
-//#include "Wire.h"
+
 #include "dummy.h"
 //#include "mcp455x.h"
 
 // This is the pin that will be used for one-wire data (depending on your arduino model, you are limited to a few choices, because some pins don't have complete interrupt support)
 // On Arduino Uno, you can use pin 2 or pin 3
-Pin oneWireData(2);
+Pin oneWireData(5);
 
 Dummy poti[4];
 //MCP455X poti[2] = { MCP455X(0), MCP455X(1) };
